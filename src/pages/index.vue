@@ -590,120 +590,11 @@
 
           <!-- Settings Tab -->
           <v-window-item value="settings">
-            <v-card-title class="text-h5 py-4">Settings</v-card-title>
-            <v-card-text>
-              <v-form @submit.prevent="saveSettings">
-                <v-text-field
-                  v-model="apiToken"
-                  label="OVH API Token"
-                  type="password"
-                  hint="Your OVH API token will be stored locally"
-                  placeholder="Enter your OVH API token"
-                  persistent-hint
-                  :rules="[v => !!v || 'Token is required']"
-                  class="mb-4"
-                ></v-text-field>
-
-                <v-select
-                  v-model="selectedSite"
-                  label="OVH Subsidiary for Cart Creation"
-                  :items="availableSites"
-                  hint="Select your OVH region for cart creation (ovhSubsidiary)"
-                  persistent-hint
-                  item-title="name"
-                  item-value="code"
-                  return-object
-                  class="mb-4"
-                >
-                  <template v-slot:selection="{ item }">
-                    <div class="d-flex align-center">
-                      <v-avatar size="24" class="me-2">
-                        <v-img :src="getCountryFlag(item?.raw?.code)" alt="Country flag"></v-img>
-                      </v-avatar>
-                      {{ item?.raw?.name || 'Select site' }} {{ item?.raw?.code ? `(${item.raw.code})` : '' }}
-                    </div>
-                  </template>
-
-                  <template v-slot:item="{ item, props }">
-                    <v-list-item v-bind="props">
-                      <template v-slot:prepend>
-                        <v-avatar size="24">
-                          <v-img :src="getCountryFlag(item?.code)" alt="Country flag"></v-img>
-                        </v-avatar>
-                      </template>
-                      <v-list-item-title>{{ item?.name || '-' }}</v-list-item-title>
-                      <v-list-item-subtitle>{{ item?.code || '' }}</v-list-item-subtitle>
-                    </v-list-item>
-                  </template>
-                </v-select>
-
-                <v-card variant="outlined" class="mb-4 pa-3">
-                  <v-card-title class="text-subtitle-1">Current Settings</v-card-title>
-                  <v-card-text>
-                    <p><strong>API Endpoint:</strong> https://eu.api.ovh.com/v1 (Fixed)</p>
-                    <p><strong>Selected Site:</strong> {{ selectedSite?.code || 'Not selected' }} - {{ selectedSite?.name || 'Not selected' }}</p>
-                    <p class="text-caption">Note: The API endpoint is fixed to eu.api.ovh.com regardless of site selection</p>
-                  </v-card-text>
-                </v-card>
-
-                <!-- Theme Selection -->
-                <v-card variant="outlined" class="mb-4 pa-3">
-                  <v-card-title class="text-subtitle-1">
-                    <v-icon icon="mdi-theme-light-dark" class="mr-2"></v-icon>
-                    Theme Settings
-                  </v-card-title>
-                  <v-card-text>
-                    <v-radio-group
-                      v-model="selectedTheme"
-                      inline
-                      hide-details
-                    >
-                      <v-radio
-                        value="light"
-                        label="Light"
-                      >
-                        <template v-slot:label>
-                          <div class="d-flex align-center">
-                            <v-icon icon="mdi-white-balance-sunny" color="amber" class="mr-2"></v-icon>
-                            Light
-                          </div>
-                        </template>
-                      </v-radio>
-                      <v-radio
-                        value="dark"
-                        label="Dark"
-                      >
-                        <template v-slot:label>
-                          <div class="d-flex align-center">
-                            <v-icon icon="mdi-weather-night" color="blue-darken-3" class="mr-2"></v-icon>
-                            Dark
-                          </div>
-                        </template>
-                      </v-radio>
-                      <v-radio
-                        value="auto"
-                        label="Auto"
-                      >
-                        <template v-slot:label>
-                          <div class="d-flex align-center">
-                            <v-icon icon="mdi-theme-light-dark" color="grey" class="mr-2"></v-icon>
-                            Auto (System)
-                          </div>
-                        </template>
-                      </v-radio>
-                    </v-radio-group>
-                  </v-card-text>
-                </v-card>
-
-                <v-btn
-                  color="primary"
-                  type="submit"
-                  :loading="tokenSaving"
-                >
-                  Save Settings
-                </v-btn>
-              </v-form>
-            </v-card-text>
+            <Settings
+              v-model:api-token="apiToken"
+              v-model:selected-site="selectedSite"
+              @settings-saved="fetchCart"
+            />
           </v-window-item>
 
           <!-- About Tab -->
@@ -917,14 +808,6 @@
       {{ errorMessage }}
     </v-snackbar>
 
-    <v-snackbar
-      v-model="showSettingsSaved"
-      :timeout="3000"
-      color="success"
-    >
-      Settings saved successfully!
-    </v-snackbar>
-
     <!-- After all other dialogs, add the checkout dialog -->
     <v-dialog
       v-model="showCheckoutDialog"
@@ -1001,6 +884,8 @@
 import { ref, onMounted, watch } from 'vue'
 import Me from './Me.vue'
 import Servers from './Servers.vue'
+import Settings from './Settings.vue'
+import { availableSites } from '../config/sites'
 
 const tabs = [
   { id: 'cart', name: 'Shopping Cart', icon: 'mdi-cart' },
@@ -1015,8 +900,6 @@ const cartItems = ref([])
 const apiToken = ref('')
 const loading = ref(false)
 const error = ref(null)
-const tokenSaving = ref(false)
-// const showTokenSaved = ref(false)
 
 // Active cart tracking
 const activeCartId = ref(null)
@@ -1080,27 +963,7 @@ const selectedServer = ref(null)
 const showServerDetailsDialog = ref(false)
 
 // Site selection
-const availableSites = [
-  { code: 'CZ', name: 'Czech Republic' },
-  { code: 'DE', name: 'Germany' },
-  { code: 'ES', name: 'Spain' },
-  { code: 'EU', name: 'Europe' },
-  { code: 'FI', name: 'Finland' },
-  { code: 'FR', name: 'France' },
-  { code: 'GB', name: 'United Kingdom' },
-  { code: 'IE', name: 'Internationnal' },
-  { code: 'IT', name: 'Italy' },
-  { code: 'LT', name: 'Lithuania' },
-  { code: 'MA', name: 'Morocco' },
-  { code: 'NL', name: 'Netherlands' },
-  { code: 'PL', name: 'Poland' },
-  { code: 'PT', name: 'Portugal' },
-  { code: 'SN', name: 'Senegal' },
-  { code: 'TN', name: 'Tunisia' }
-]
-
 const selectedSite = ref(null)
-const showSettingsSaved = ref(false)
 
 // Theme selection
 const selectedTheme = ref('auto')
@@ -1233,16 +1096,6 @@ const showError = (message) => {
   showErrorSnackbar.value = true
 }
 
-// Function to get country flag for site code
-const getCountryFlag = (siteCode) => {
-  // Check if siteCode is defined
-  if (!siteCode) return 'https://flagcdn.com/48x36/xx.png'; // Return a placeholder or default flag
-
-  // Convert site code to country code for flags
-  const countryCode = siteCode === 'EU' ? 'eu' : siteCode.toLowerCase();
-  return `https://flagcdn.com/48x36/${countryCode}.png`;
-}
-
 // Function to get API endpoint based on selected site
 const getApiEndpoint = () => {
   // Always use eu.api.ovh.com regardless of site selection
@@ -1265,34 +1118,6 @@ const applyTheme = (theme) => {
 watch(selectedTheme, (newTheme) => {
   applyTheme(newTheme)
 })
-
-// Function to save settings
-const saveSettings = async () => {
-  try {
-    tokenSaving.value = true
-
-    // Save token
-    localStorage.setItem('ovhApiToken', apiToken.value)
-
-    // Save selected site
-    if (selectedSite.value) {
-      localStorage.setItem('ovhSiteCode', selectedSite.value.code)
-    }
-
-    // Save selected theme
-    localStorage.setItem('ovhTheme', selectedTheme.value)
-
-    showSettingsSaved.value = true
-
-    // Try to fetch cart data with the new settings
-    await fetchCart()
-  } catch (err) {
-    console.error('Error saving settings:', err)
-    showError(`Error saving settings: ${err.message}`)
-  } finally {
-    tokenSaving.value = false
-  }
-}
 
 // Function to fetch cart data
 const fetchCart = async () => {
