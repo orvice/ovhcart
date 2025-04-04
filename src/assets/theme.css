@@ -28,9 +28,13 @@
 }
 
 /* Apply theme variables to Vuetify */
-.v-application[data-v-app] {
+.v-application {
   background-color: var(--background-color) !important;
   color: var(--text-color) !important;
+}
+
+.v-main {
+  background-color: var(--background-color) !important;
 }
 
 .v-card {
