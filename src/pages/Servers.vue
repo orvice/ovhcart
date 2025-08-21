@@ -40,9 +40,9 @@
       
       <v-card-text>
         <div v-if="loading">
-          <v-progress-circular 
-            indeterminate 
-            color="primary" 
+          <v-progress-circular
+            indeterminate
+            color="primary"
           />
           <span class="ml-2">Loading server catalog...</span>
         </div>
@@ -61,6 +61,63 @@
         />
         
         <div v-else>
+          <!-- Price Filter Section -->
+          <v-card
+            variant="outlined"
+            class="mb-4 pa-4"
+          >
+            <v-card-title class="text-subtitle-1">
+              <v-icon
+                icon="mdi-filter-variant"
+                color="primary"
+                class="mr-2"
+              />
+              Filter by Price Range
+            </v-card-title>
+            <v-card-text>
+              <v-row align="center">
+                <v-col cols="12" md="4">
+                  <v-text-field
+                    v-model.number="priceFilter.min"
+                    label="Min Price (€)"
+                    type="number"
+                    min="0"
+                    density="compact"
+                    variant="outlined"
+                    prepend-inner-icon="mdi-currency-eur"
+                    @input="filterServersByPrice"
+                  />
+                </v-col>
+                <v-col cols="12" md="4">
+                  <v-text-field
+                    v-model.number="priceFilter.max"
+                    label="Max Price (€)"
+                    type="number"
+                    min="0"
+                    density="compact"
+                    variant="outlined"
+                    prepend-inner-icon="mdi-currency-eur"
+                    @input="filterServersByPrice"
+                  />
+                </v-col>
+                <v-col cols="12" md="4">
+                  <v-btn
+                    color="primary"
+                    variant="tonal"
+                    @click="clearPriceFilter"
+                    block
+                  >
+                    <v-icon icon="mdi-filter-off" class="mr-2" />
+                    Clear Filter
+                  </v-btn>
+                </v-col>
+              </v-row>
+              <div v-if="filteredPlansCount !== null" class="text-caption mt-2">
+                Showing {{ filteredPlansCount }} of {{ totalPlansCount }} server plans
+              </div>
+            </v-card-text>
+          </v-card>
+          
           <!-- Manual Plan Code Input Button -->
           <v-card 
             variant="outlined" 
@@ -90,10 +147,10 @@
           </v-card>
           
           <v-row>
-            <v-col 
-              v-for="(plan, index) in serverCatalog.plans"
+            <v-col
+              v-for="(plan, index) in filteredPlans"
               :key="index"
-              cols="12" 
+              cols="12"
               md="4"
             >
               <v-card class="h-100">
@@ -394,7 +451,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 // Props from parent component
@@ -434,6 +491,12 @@ const selectedServer = ref(null);
 const selectedDuration = ref('P1M');
 const lastRefreshTime = ref(null); // 最后刷新时间
 const isFromCache = ref(false); // 数据是否来自缓存
+
+// Price filter state
+const priceFilter = ref({
+  min: null,
+  max: null
+});
 
 // Durations list for selection
 const durations = [
@@ -520,13 +583,88 @@ const getPlanPrice = (plan) => {
     const priceValue = (pricing.price / 100000000).toFixed(2);
     // Use EUR as default currency or customize based on your needs
     return `€${priceValue}`;
-  } 
+  }
   // Handle legacy format if present
   else if (pricing.price && typeof pricing.price === 'object') {
     return `${pricing.price.text || `${pricing.price.value} ${pricing.price.currencyCode || 'EUR'}`}`;
   }
   
   return 'Price not available';
+};
+
+// Function to get numeric price value for filtering
+const getNumericPrice = (plan) => {
+  if (!plan.pricings || plan.pricings.length === 0) {
+    return null;
+  }
+  
+  const pricing = plan.pricings[0];
+  
+  if (typeof pricing.price === 'number') {
+    // Convert from micro units to standard currency
+    return pricing.price / 100000000;
+  }
+  else if (pricing.price && typeof pricing.price === 'object' && pricing.price.value) {
+    return parseFloat(pricing.price.value);
+  }
+  
+  return null;
+};
+
+// Computed property for filtered plans
+const filteredPlans = computed(() => {
+  if (!serverCatalog.value.plans) {
+    return [];
+  }
+  
+  // If no filter is set, return all plans
+  if (priceFilter.value.min === null && priceFilter.value.max === null) {
+    return serverCatalog.value.plans;
+  }
+  
+  return serverCatalog.value.plans.filter(plan => {
+    const price = getNumericPrice(plan);
+    
+    // Skip plans without valid price
+    if (price === null) {
+      return false;
+    }
+    
+    // Check min price filter
+    if (priceFilter.value.min !== null && price < priceFilter.value.min) {
+      return false;
+    }
+    
+    // Check max price filter
+    if (priceFilter.value.max !== null && price > priceFilter.value.max) {
+      return false;
+    }
+    
+    return true;
+  });
+});
+
+// Computed property for total plans count
+const totalPlansCount = computed(() => {
+  return serverCatalog.value.plans ? serverCatalog.value.plans.length : 0;
+});
+
+// Computed property for filtered plans count
+const filteredPlansCount = computed(() => {
+  return filteredPlans.value.length;
+});
+
+// Function to trigger filtering (called on input change)
+const filterServersByPrice = () => {
+  // The filtering is handled by the computed property automatically
+  console.log(`Filtering servers with price range: €${priceFilter.value.min || 0} - €${priceFilter.value.max || '∞'}`);
+};
+
+// Function to clear price filter
+const clearPriceFilter = () => {
+  priceFilter.value.min = null;
+  priceFilter.value.max = null;
+  console.log('Price filter cleared');
 };
 
 // Function to get property color
