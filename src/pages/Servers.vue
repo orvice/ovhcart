@@ -31,7 +31,6 @@
           variant="elevated"
           prepend-icon="mdi-refresh"
           :loading="loading"
-          :disabled="!apiToken"
           @click="forceRefreshServers"
         >
           Refresh Servers
@@ -229,15 +228,16 @@
                     </v-list-item>
                     
                     <!-- Price info -->
-                    <v-list-item v-if="getPlanPrice(plan)">
+                    <!-- Price info -->
+                    <v-list-item
+                      v-for="(pricing, priceIndex) in plan.pricings || []"
+                      :key="priceIndex"
+                    >
                       <template #prepend>
-                        <v-icon 
-                          icon="mdi-currency-eur" 
-                          color="primary" 
-                        />
+                        <v-icon icon="mdi-currency-eur" color="primary" />
                       </template>
-                      <v-list-item-title>Price</v-list-item-title>
-                      <v-list-item-subtitle>{{ getPlanPrice(plan) }}</v-list-item-subtitle>
+                      <v-list-item-title>{{ pricing.description }}</v-list-item-title>
+                      <v-list-item-subtitle>{{ formatPricing(pricing) }}</v-list-item-subtitle>
                     </v-list-item>
                   </v-list>
                   
@@ -458,7 +458,8 @@ import { useRouter } from 'vue-router';
 const props = defineProps({
   apiToken: {
     type: String,
-    required: true
+    required: false,
+    default: ''
   },
   selectedSite: {
     type: Object,
@@ -571,7 +572,7 @@ const formatAddonCode = (code) => {
 
 // Function to get plan price
 const getPlanPrice = (plan) => {
-  if (!plan.pricings || plan.pricings.length === 0) {
+  if (!plan || !Array.isArray(plan.pricings) || plan.pricings.length === 0) {
     return 'Price not available';
   }
   
@@ -594,7 +595,7 @@ const getPlanPrice = (plan) => {
 
 // Function to get numeric price value for filtering
 const getNumericPrice = (plan) => {
-  if (!plan.pricings || plan.pricings.length === 0) {
+  if (!plan || !Array.isArray(plan.pricings) || plan.pricings.length === 0) {
     return null;
   }
   
@@ -609,6 +610,17 @@ const getNumericPrice = (plan) => {
   }
   
   return null;
+};
+// Format a single pricing entry for display
+const formatPricing = (pricing) => {
+  let amountText = 'Price not available';
+  if (typeof pricing.price === 'number') {
+    const priceValue = (pricing.price / 100000000).toFixed(2);
+    amountText = `€${priceValue}`;
+  } else if (pricing.price && typeof pricing.price === 'object') {
+    amountText = pricing.price.text || `${pricing.price.value} ${pricing.price.currencyCode || 'EUR'}`;
+  }
+  return `${pricing.description}: ${amountText}`;
 };
 
 // Computed property for filtered plans
@@ -999,9 +1011,7 @@ const forceRefreshServers = () => {
 
 // Fetch servers on component mount if we have a token
 onMounted(() => {
-  if (props.apiToken) {
-    fetchServers();
-  }
+  fetchServers();
 });
 </script>
 
