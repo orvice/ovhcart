@@ -599,7 +599,7 @@ const getNumericPrice = (plan) => {
     return null;
   }
   
-  const pricing = plan.pricings[0];
+  const pricing = plan.pricings.length > 1 ? plan.pricings[1] : plan.pricings[0];
   
   if (typeof pricing.price === 'number') {
     // Convert from micro units to standard currency
